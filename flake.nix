@@ -1,5 +1,6 @@
 {
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs";
+  inputs.nixpkgs.url =
+    "github:gardspirito/nixpkgs/mx-puppet-discord"; # "github:NixOS/nixpkgs/nixos-unstable";
 
   description = "Unu niks-floko por servilo de Obscurative";
 
@@ -7,6 +8,7 @@
     let
       adminEmail = "guardspirit@protonmail.com";
       domain = "dev.obscurative.ru";
+      matrix = "m.obscurative.ru";
       subdomains = [
         {
           subd = "";
@@ -47,13 +49,18 @@
               ] font;
               rez = builtins.toFile "wordpress.nix" tek;
             in rez)
-            ({ pkgs, config, ... }:
-              let
+            ({ pkgs, config, ... }: {
+              options = with pkgs.lib; {
+                atest = mkOption { type = types.path; };
+                atestSxl = mkOption { type = types.path; };
+                atestDos = mkOption { type = types.path; };
+              };
+
+              config = {
                 atest = config.security.acme.certs.ssl.directory;
-                atestSxl = "${atest}/key.pem";
-                atestDos = "${atest}/cert.pem";
-              in {
-                boot.isContainer = !digitalOcean;
+                atestSxl = "${config.atest}/key.pem";
+                atestDos = "${config.atest}/cert.pem";
+
                 # Niks
                 nix.package = pkgs.nixFlakes;
                 nix.extraOptions =
@@ -70,7 +77,11 @@
                 }];
 
                 # Medio
-                environment.systemPackages = with pkgs; [ git htop ];
+                environment.systemPackages = with pkgs; [
+                  git
+                  htop
+                  matrix-appservice-discord
+                ];
                 users.defaultUserShell = pkgs.fish;
                 programs.fish.enable = true;
                 zramSwap.enable = true;
@@ -87,29 +98,26 @@
                 # Yggdrasil kaj reto
                 services.yggdrasil = {
                   enable = true;
-                  config = {
-                    "Peers" = [ "tcp://94.130.203.208:5999" ];
-                    #"Listen" = [ "tls://[::]:0" ];
-                  };
+                  config = { "Peers" = [ "tcp://94.130.203.208:5999" ]; };
                   persistentKeys = true;
                 };
-                networking.firewall.allowedTCPPorts = [ 443 80 ];
+                networking.firewall.allowedTCPPorts = [ 443 80 8448 ];
 
                 # Fakta servilo
                 security.acme.acceptTerms = true;
                 security.acme.email = adminEmail;
                 security.acme.certs.ssl = {
-                  domain = "${domain}";
-                  extraDomainNames = [ "*.${domain}" ];
+                  inherit domain;
+                  extraDomainNames = [ "*.${domain}" matrix ];
                   dnsProvider = "digitalocean";
-                  credentialsFile = "/root/token";
+                  credentialsFile = "/secrets/digitalocean-token";
                   group = config.services.httpd.group;
                 };
                 services.httpd.adminAddr = adminEmail;
                 services.postfix = {
                   enable = true; # Email
-                  sslCert = atestDos;
-                  sslKey = atestSxl;
+                  sslCert = config.atestDos;
+                  sslKey = config.atestSxl;
                   hostname = domain;
                   inherit domain;
                   config = let milt = config.services.opendkim.socket;
@@ -136,12 +144,12 @@
                       value = {
                         virtualHost = {
                           serverAliases = [ "www.${rdomain}" ];
-                          sslServerKey = atestSxl;
-                          sslServerCert = atestDos;
-                          sslServerChain = "${atest}/chain.pem";
+                          sslServerKey = config.atestSxl;
+                          sslServerCert = config.atestDos;
+                          sslServerChain = "${config.atest}/chain.pem";
                           listen = [
                             {
-                              ip = "200:9b1e:3f34:7257:8a9b:5e6d:2fc2:658f";
+                              ip = "202:361:fa33:474d:3a1d:ba05:db60:fb00";
                               port = 80;
                             }
                             {
@@ -167,14 +175,123 @@
                   in pkgs.lib.lists.flatten (builtins.map ({ subd, ... }:
                     let
                       dos = "/var/lib/wordpress/${subd}${domain}/content";
-                      ag = "0750 wordpress ${group} - -";
+                      ag = "0750 - ${group} - -";
                     in [
                       "d '${dos}/plugins' ${ag}"
                       "Z '${dos}/plugins' ${ag}"
                       "d '${dos}/themes' ${ag}"
                       "Z '${dos}/themes' ${ag}"
                     ]) subdomains);
+              };
+            })
+            ({ pkgs, config, ... }:
+              let
+                apps_discord = "/var/lib/matrix-appservice-discord";
+                apps_discord_reg = "${apps_discord}/discord-registration.yaml";
+              in {
+                services.matrix-synapse = {
+                  url_preview_enabled = true;
+                  allow_guest_access = true;
+                  enable = true;
+                  server_name = matrix;
+                  public_baseurl = "https://${matrix}:8448/";
+                  tls_certificate_path = config.atestDos;
+                  tls_private_key_path = config.atestSxl;
+                  enable_registration = true;
+                  withJemalloc = true;
+                  listeners = [{
+                    bind_address = "0.0.0.0";
+                    port = 8448;
+                    resources = [
+                      {
+                        compress = true;
+                        names = [ "client" ];
+                      }
+                      {
+                        compress = false;
+                        names = [ "federation" ];
+                      }
+                    ];
+                    tls = true;
+                    type = "http";
+                  }];
+                  extraConfig = ''
+                    app_service_config_files:
+                      - '/secrets/discord-tmp.yaml'
+                      #- '/secrets/discord-puppet-tmp.yaml'
+                  '';
+                  extraConfigFiles = [ "/secrets/matrix-github-oidc" ];
+                };
 
+                users.users.matrix-synapse.extraGroups = [ "wwwrun" ];
+
+                services.postgresql = {
+                  enable = true;
+                  ensureDatabases = [ "matrix-synapse" ];
+                  ensureUsers = [{
+                    name = "matrix-synapse";
+                    ensurePermissions = {
+                      "DATABASE \"matrix-synapse\"" = "ALL PRIVILEGES";
+                    };
+                  }];
+                };
+
+                services.matrix-appservice-discord = {
+                  enable = true;
+                  settings = {
+                    bridge = {
+                      domain = matrix;
+                      enableSelfServiceBridging = true;
+                      homeserverUrl = "https://${matrix}:8448";
+                    };
+                    database = { filename = "${apps_discord}/discord.db"; };
+                  };
+                  environmentFile = "/secrets/matrix-appservice-discord-token";
+                };
+
+                services.mx-puppet-discord = {
+                  enable = false;
+                  settings = {
+                    bridge = {
+                      domain = matrix;
+                      homeserverUrl = "https://${matrix}:8448";
+                    };
+
+                    database = {
+                      filename = "/var/lib/mx-puppet-discord/database.db";
+                    };
+                    logging = {
+                      console = "info";
+                      lineDateFormat = "MMM-D HH:mm:ss.SSS";
+                    };
+                    namePatterns = {
+                      group = ":name";
+                      room = ":name";
+                      user = ":name";
+                      userOverride = ":displayname";
+                    };
+                    presence = {
+                      enabled = true;
+                      interval = 500;
+                    };
+                    provisioning = {
+                      whitelist = [
+                        "@scifyro:matrix\\.org"
+                        "@gardspirito:m\\.obscurative\\.ru"
+                      ];
+                    };
+                    relay = {
+                      whitelist = [
+                        "@scifyro:matrix\\.org"
+                        "@gardspirito:m\\.obscurative\\.ru"
+                        "@vaflo:matrix\\.org"
+                      ];
+                    };
+                    selfService = {
+                      whitelist = [ "@gardspirito:m\\.obscurative\\.ru" ];
+                    };
+                  };
+                };
               })
           ];
       };
