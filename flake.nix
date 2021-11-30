@@ -1,6 +1,5 @@
 {
-  inputs.nixpkgs.url =
-    "github:gardspirito/nixpkgs/mx-puppet-discord"; # "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   description = "Unu niks-floko por servilo de Obscurative";
 
@@ -149,7 +148,7 @@
                           sslServerChain = "${config.atest}/chain.pem";
                           listen = [
                             {
-                              ip = "202:361:fa33:474d:3a1d:ba05:db60:fb00";
+                              ip = "202:361:fa33:474d:3a1d:ba05:db60:fb00g";
                               port = 80;
                             }
                             {
@@ -218,7 +217,6 @@
                   extraConfig = ''
                     app_service_config_files:
                       - '/secrets/discord-tmp.yaml'
-                      #- '/secrets/discord-puppet-tmp.yaml'
                   '';
                   extraConfigFiles = [ "/secrets/matrix-github-oidc" ];
                 };
@@ -247,50 +245,6 @@
                     database = { filename = "${apps_discord}/discord.db"; };
                   };
                   environmentFile = "/secrets/matrix-appservice-discord-token";
-                };
-
-                services.mx-puppet-discord = {
-                  enable = false;
-                  settings = {
-                    bridge = {
-                      domain = matrix;
-                      homeserverUrl = "https://${matrix}:8448";
-                    };
-
-                    database = {
-                      filename = "/var/lib/mx-puppet-discord/database.db";
-                    };
-                    logging = {
-                      console = "info";
-                      lineDateFormat = "MMM-D HH:mm:ss.SSS";
-                    };
-                    namePatterns = {
-                      group = ":name";
-                      room = ":name";
-                      user = ":name";
-                      userOverride = ":displayname";
-                    };
-                    presence = {
-                      enabled = true;
-                      interval = 500;
-                    };
-                    provisioning = {
-                      whitelist = [
-                        "@scifyro:matrix\\.org"
-                        "@gardspirito:m\\.obscurative\\.ru"
-                      ];
-                    };
-                    relay = {
-                      whitelist = [
-                        "@scifyro:matrix\\.org"
-                        "@gardspirito:m\\.obscurative\\.ru"
-                        "@vaflo:matrix\\.org"
-                      ];
-                    };
-                    selfService = {
-                      whitelist = [ "@gardspirito:m\\.obscurative\\.ru" ];
-                    };
-                  };
                 };
               })
           ];

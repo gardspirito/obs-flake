@@ -2,16 +2,16 @@
   "nodes": {
     "nixpkgs": {
       "locked": {
-        "lastModified": 1636759456,
-        "narHash": "sha256-N/8TZoCBj1JpLPcCDtotRaZwaTJYU6Gc4zYz04ZCwc4=",
-        "owner": "gardspirito",
+        "lastModified": 1638198142,
+        "narHash": "sha256-plU9b8r4St6q4U7VHtG9V7oF8k9fIpfXl/KDaZLuY9k=",
+        "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "6574e0e859358f593a3d200694da6719eadb2544",
+        "rev": "8a308775674e178495767df90c419425474582a1",
         "type": "github"
       },
       "original": {
-        "owner": "gardspirito",
-        "ref": "mx-puppet-discord",
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
         "repo": "nixpkgs",
         "type": "github"
       }
