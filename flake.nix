@@ -80,11 +80,15 @@
                   git
                   htop
                   matrix-appservice-discord
+                  du-dust
                 ];
                 users.defaultUserShell = pkgs.fish;
                 programs.fish.enable = true;
-                zramSwap.enable = true;
-                zramSwap.priority = 7;
+                zramSwap = {
+                  enable = true;
+                  priority = 7;
+                  memoryPercent = 75;
+                };
 
                 # SSH
                 services.fail2ban.enable = true;
@@ -104,7 +108,7 @@
 
                 # Fakta servilo
                 security.acme.acceptTerms = true;
-                security.acme.email = adminEmail;
+                security.acme.defaults.email = adminEmail;
                 security.acme.certs.ssl = {
                   inherit domain;
                   extraDomainNames = [ "*.${domain}" matrix ];
