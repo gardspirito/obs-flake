@@ -6,7 +6,7 @@
   outputs = en@{ self, nixpkgs, ... }:
     let
       adminEmail = "guardspirit@protonmail.com";
-      domain = "dev.obscurative.ru";
+      domain = "obscurative.ru";
       matrix = "m.obscurative.ru";
       subdomains = [
         {
@@ -56,6 +56,8 @@
               };
 
               config = {
+                system.stateVersion = "22.05";
+
                 atest = config.security.acme.certs.ssl.directory;
                 atestSxl = "${config.atest}/key.pem";
                 atestDos = "${config.atest}/cert.pem";
@@ -63,7 +65,7 @@
                 # Niks
                 nix.package = pkgs.nixFlakes;
                 nix.extraOptions =
-                  "experimental-features = nix-command flakes ca-references";
+                  "experimental-features = nix-command flakes";
                 nix.autoOptimiseStore = true;
 
                 # Masxino
@@ -74,6 +76,11 @@
                   device = "/swapfile";
                   size = 3 * 1024; # MB
                 }];
+                zramSwap = {
+                  enable = true;
+                  priority = 7;
+                  memoryPercent = 75;
+                };
 
                 # Medio
                 environment.systemPackages = with pkgs; [
@@ -84,11 +91,19 @@
                 ];
                 users.defaultUserShell = pkgs.fish;
                 programs.fish.enable = true;
-                zramSwap = {
-                  enable = true;
-                  priority = 7;
-                  memoryPercent = 75;
-                };
+
+                # Sekureco
+                boot.kernelPackages = pkgs.linuxPackages_hardened;
+                security.sudo.enable = false;
+                security.apparmor.enable = true;
+                security.lockKernelModules = true;
+                security.protectKernelImage = true;
+                security.auditd.enable = true;
+                services.rsyslogd.enable = true;
+                security.audit.enable = true;
+                security.audit.rules = [
+                  "-a exit,always -F arch=b64 -S execve"
+                ];
 
                 # SSH
                 services.fail2ban.enable = true;
@@ -111,80 +126,79 @@
                 security.acme.defaults.email = adminEmail;
                 security.acme.certs.ssl = {
                   inherit domain;
-                  extraDomainNames = [ "*.${domain}" matrix ];
+                  extraDomainNames = [ "*.${domain}" "www.patagona.${domain}" ]; # matrix
                   dnsProvider = "digitalocean";
                   credentialsFile = "/secrets/digitalocean-token";
-                  group = config.services.httpd.group;
                 };
-                services.httpd.adminAddr = adminEmail;
-                services.postfix = {
-                  enable = true; # Email
-                  sslCert = config.atestDos;
-                  sslKey = config.atestSxl;
-                  hostname = domain;
-                  inherit domain;
-                  config = let milt = config.services.opendkim.socket;
-                  in {
-                    inet_protocols = "ipv4";
-                    milter_default_action = "accept";
-                    milter_protocol = "2";
-                    smtpd_milters = milt;
-                    non_smtpd_milters = milt;
-                  };
-                };
-                services.opendkim = {
-                  enable = true;
-                  selector = "s1";
-                  user = config.services.postfix.user;
-                  domains = "csl:${domain},*.${domain}";
-                };
+                #services.httpd.adminAddr = adminEmail;
+                #services.postfix = {
+                #  enable = true; # Email
+                #  sslCert = config.atestDos;
+                #  sslKey = config.atestSxl;
+                #  hostname = domain;
+                #  inherit domain;
+                #  config = let milt = config.services.opendkim.socket;
+                #  in {
+                #    inet_protocols = "ipv4";
+                #    milter_default_action = "accept";
+                #    milter_protocol = "2";
+                #    smtpd_milters = milt;
+                #    non_smtpd_milters = milt;
+                #  };
+                #};
+                #services.opendkim = {
+                #  enable = true;
+                #  selector = "s1";
+                #  user = config.services.postfix.user;
+                #  domains = "csl:${domain},*.${domain}";
+                #};
 
-                services.wordpress.sites = builtins.listToAttrs (builtins.map
-                  (({ subd, prefix }:
-                    let rdomain = "${subd}${domain}";
-                    in {
-                      name = rdomain;
-                      value = {
-                        virtualHost = {
-                          serverAliases = [ "www.${rdomain}" ];
-                          sslServerKey = config.atestSxl;
-                          sslServerCert = config.atestDos;
-                          sslServerChain = "${config.atest}/chain.pem";
-                          listen = [
-                            {
-                              ip = "202:361:fa33:474d:3a1d:ba05:db60:fb00g";
-                              port = 80;
-                            }
-                            {
-                              ip = "0.0.0.0";
-                              port = 443;
-                              ssl = true;
-                            }
-                          ];
-                        };
+                #services.wordpress.sites = builtins.listToAttrs (builtins.map
+                #  (({ subd, prefix }:
+                #    let rdomain = "${subd}${domain}";
+                #    in {
+                #      name = rdomain;
+                #      value = {
+                #        virtualHost = {
+                #          serverAliases = [ "www.${rdomain}" ];
+                #          sslServerKey = config.atestSxl;
+                #          sslServerCert = config.atestDos;
+                #          sslServerChain = "${config.atest}/chain.pem";
+                #          listen = [
+                #            {
+                #              ip = "202:361:fa33:474d:3a1d:ba05:db60:fb00g";
+                #              port = 80;
+                #            }
+                #            {
+                #              ip = "0.0.0.0";
+                #              port = 443;
+                #              ssl = true;
+                #            }
+                #          ];
+                #        };
 
-                        database.tablePrefix = "${prefix}_";
-                        contentDir = "/var/lib/wordpress/${rdomain}/content";
+                #        database.tablePrefix = "${prefix}_";
+                #        contentDir = "/var/lib/wordpress/${rdomain}/content";
 
-                        extraConfig = ''
-                          define( 'FS_METHOD', 'direct' );
-                          define( 'CUSTOM_USER_TABLE', "users" );
-                        '';
-                      };
-                    })) subdomains);
+                #        extraConfig = ''
+                #          define( 'FS_METHOD', 'direct' );
+                #          define( 'CUSTOM_USER_TABLE', "users" );
+                #        '';
+                #      };
+                #    })) subdomains);
 
-                systemd.tmpfiles.rules =
-                  let group = config.services.httpd.group;
-                  in pkgs.lib.lists.flatten (builtins.map ({ subd, ... }:
-                    let
-                      dos = "/var/lib/wordpress/${subd}${domain}/content";
-                      ag = "0750 - ${group} - -";
-                    in [
-                      "d '${dos}/plugins' ${ag}"
-                      "Z '${dos}/plugins' ${ag}"
-                      "d '${dos}/themes' ${ag}"
-                      "Z '${dos}/themes' ${ag}"
-                    ]) subdomains);
+                #systemd.tmpfiles.rules =
+                #  let group = config.services.httpd.group;
+                #  in pkgs.lib.lists.flatten (builtins.map ({ subd, ... }:
+                #    let
+                #      dos = "/var/lib/wordpress/${subd}${domain}/content";
+                #      ag = "0750 - ${group} - -";
+                #    in [
+                #      "d '${dos}/plugins' ${ag}"
+                #      "Z '${dos}/plugins' ${ag}"
+                #      "d '${dos}/themes' ${ag}"
+                #      "Z '${dos}/themes' ${ag}"
+                #    ]) subdomains);
               };
             })
             ({ pkgs, config, ... }:
@@ -193,39 +207,38 @@
                 apps_discord_reg = "${apps_discord}/discord-registration.yaml";
               in {
                 services.matrix-synapse = {
-                  url_preview_enabled = true;
-                  allow_guest_access = true;
                   enable = true;
-                  server_name = matrix;
-                  public_baseurl = "https://${matrix}:8448/";
-                  tls_certificate_path = config.atestDos;
-                  tls_private_key_path = config.atestSxl;
-                  enable_registration = true;
+                  settings = {
+                    url_preview_enabled = true;
+                    allow_guest_access = true;
+                    tls_certificate_path = config.atestDos;
+                    tls_private_key_path = config.atestSxl;
+                    public_baseurl = "https://${matrix}:8448/";
+                    listeners = [{
+                      bind_addresses = [ "0.0.0.0" ];
+                      port = 8448;
+                      resources = [
+                        {
+                          compress = true;
+                          names = [ "client" ];
+                        }
+                        {
+                          compress = false;
+                          names = [ "federation" ];
+                        }
+                      ];
+                      tls = true;
+                      type = "http";
+                    }];
+                    server_name = matrix;
+                    enable_registration = true;
+                    app_service_config_files = [ "/secrets/discord-tmp.yaml" ];
+                  };
                   withJemalloc = true;
-                  listeners = [{
-                    bind_address = "0.0.0.0";
-                    port = 8448;
-                    resources = [
-                      {
-                        compress = true;
-                        names = [ "client" ];
-                      }
-                      {
-                        compress = false;
-                        names = [ "federation" ];
-                      }
-                    ];
-                    tls = true;
-                    type = "http";
-                  }];
-                  extraConfig = ''
-                    app_service_config_files:
-                      - '/secrets/discord-tmp.yaml'
-                  '';
                   extraConfigFiles = [ "/secrets/matrix-github-oidc" ];
                 };
 
-                users.users.matrix-synapse.extraGroups = [ "wwwrun" ];
+                users.users.matrix-synapse.extraGroups = [ "acme" ];
 
                 services.postgresql = {
                   enable = true;
